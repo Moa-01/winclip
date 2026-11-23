@@ -21,7 +21,7 @@ Press **Super + V** (the Windows key + V) and a small panel opens with everythin
 ## Requirements
 
 - **GNOME Shell 46, 47 or 48.** Tested on Ubuntu 24.04 with GNOME 46 on Wayland.
-- Nothing else to install. It uses only what GNOME already ships.
+- Nothing else to install. It uses only what a GNOME desktop already ships (GNOME Shell, Python 3, Xwayland).
 
 > Not for KDE Plasma (it has Klipper built in), Sway, Hyprland or other desktops. WinClip is a GNOME Shell extension.
 
@@ -110,6 +110,8 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 2. **History.** Items live in memory, newest first, capped at 25. Each one gets a fingerprint (the text itself, or an MD5 hash of the image) so repeat copies move to the top instead of piling up.
 3. **The panel.** Super + V builds the panel with GNOME's own toolkit (St), places it near the pointer and takes keyboard focus. A transparent layer covers every monitor so a click outside closes it. When it closes, the whole panel is destroyed, so nothing stays around while it's hidden.
 4. **Pasting.** Clicking an item puts it back on the clipboard. WinClip then waits a moment for focus to return to your app and presses **Ctrl + V** with a virtual keyboard. For terminals it presses **Ctrl + Shift + V**; a terminal is spotted by its window class name (`gnome-terminal`, `kitty`, `alacritty`, `wezterm`, `foot`, `konsole`, `tilix`, `ghostty`, `terminator`, `ptyxis`, …).
+   - **Files** need several clipboard formats at once: the Files app and desktop read `x-special/gnome-copied-files`, while Slack, browsers and most other apps read `text/uri-list` (or the picture itself). GNOME 46 only lets an extension offer *one* format, so for file items WinClip starts `paste-helper.py`. This tiny helper takes the clipboard through X11 (an X11 app may do that without focus, and GNOME forwards every format to all apps) and offers all of them, like the Files app does. WinClip sends Ctrl + V once the helper says it's ready. The helper exits as soon as anything else is copied.
+   - If the helper can't start or isn't ready within 1 second, WinClip pastes anyway with just the Files-app format, so the Files app and desktop still work. The helper also quits by itself if it can't get the clipboard within 5 seconds.
 5. **Pins.** Pinned items are written to `~/.local/share/winclip/pinned.json`, with images stored as base64. The folder is readable only by you (`0700`). Nothing else is ever written to disk.
 
 ### Memory and disk use
@@ -118,7 +120,8 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 - **History limit:** **25 items** maximum.
 - **Image previews:** small thumbnails (at most 300 × 170 px), decoded once per image and reused. Full-size images are never decoded.
 - **Measured memory:** 25 full-screen screenshots in history added about 45 MB to GNOME Shell's memory, which is the worst case. A text-only history is a few kilobytes.
-- **Disk:** the extension itself is about 40 KB. The only file it writes is the pins file.
+- **File paste helper:** about 11 MB (15 MB with a 4 MB image). It only runs while a file you pasted from WinClip is on the clipboard, at most one at a time, and exits on your next copy.
+- **Disk:** the extension itself is about 50 KB. The only file it keeps is the pins file. The helper's handover files in `$XDG_RUNTIME_DIR/winclip/` (a RAM-backed folder only you can read) are deleted the moment the helper reads them.
 
 ## Limitations
 
@@ -127,7 +130,9 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 - **Log out after installing or updating.** Wayland can't reload GNOME Shell while you're logged in.
 - **Opens near the mouse, not the text cursor.** Windows opens it at the text cursor, but Wayland doesn't tell extensions where that is.
 - **One format per item.** Each copy is stored as plain text *or* an image. Formatting (bold, links in rich text, spreadsheet cells) is lost; pasting gives plain text. When a copy offers both text and an image (common in office apps), the text is kept.
-- **Copied files paste only where the Files app's format is understood.** GNOME 46 lets an extension put back just one clipboard format, so files go back in the Files-app format (`x-special/gnome-copied-files`). That works in the Files app and on the desktop. Apps that only take files as `text/uri-list`, or want the raw image (for example some chat apps or image editors), won't paste them. Copy the file again with Ctrl + C there. If the file was moved or deleted since you copied it, pasting does nothing.
+- **Pasting files needs Xwayland** (GNOME runs it by default). Without it, files only paste into the Files app and the desktop.
+- **Files are pasted from where they were.** If a file was moved or deleted since you copied it, pasting it does nothing.
+- **Rich formats are only kept for files.** For text, only the plain text is restored (see *One format per item*).
 - **Auto-paste presses Ctrl + V** (or Ctrl + Shift + V in recognised terminals). Apps with a different paste shortcut, or terminals whose window class isn't in the list, won't paste automatically. The item is still on the clipboard, so paste it yourself.
 - **Password safety depends on the password manager.** Copies are skipped only when the app marks them as secret (`x-kde-passwordManagerHint`, used by KeePassXC and others). Passwords from apps that don't do this stay in history until you log out, unless you remove them with ✕.
 - **Pins are stored unencrypted** in `~/.local/share/winclip/pinned.json`. Don't pin secrets.
@@ -178,6 +183,7 @@ Then log out and back in.
 | `stylesheet.css` | The look |
 | `metadata.json` | Extension name, ID and supported GNOME versions |
 | `schemas/` | The Super + V shortcut setting |
+| `paste-helper.py` | Offers files in every clipboard format when pasting (Python + libX11, no extra packages) |
 | `install.sh` / `uninstall.sh` | Set up / remove for the current user |
 
 ## License

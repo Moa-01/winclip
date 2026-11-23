@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 command -v gnome-shell >/dev/null || { echo "WinClip needs GNOME Shell." >&2; exit 1; }
 
 mkdir -p "$DEST/schemas"
-cp extension.js stylesheet.css metadata.json "$DEST/"
+cp extension.js paste-helper.py stylesheet.css metadata.json "$DEST/"
 cp schemas/*.gschema.xml "$DEST/schemas/"
 glib-compile-schemas "$DEST/schemas"
 

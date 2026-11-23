@@ -53,9 +53,11 @@ export default class WinClip extends Extension {
         this._sel.disconnect(this._selId);
         if (this._pasteId)
             GLib.source_remove(this._pasteId);
+        if (this._readyId)
+            GLib.source_remove(this._readyId);
         this._close();
         kept = this._items;
-        this._clip = this._items = this._vk = this._sel = this._pasteId = null;
+        this._clip = this._items = this._vk = this._sel = this._pasteId = this._readyId = null;
     }
 
     // ---- history ----
@@ -317,9 +319,8 @@ export default class WinClip extends Extension {
     }
 
     _paste(item) {
-        // ponytail: GNOME 46 lets an extension offer one format only, so files go back in the
-        // Files-app format; apps that only take text/uri-list won't paste them. Multi-format needs GJS async vfuncs.
         if (item.uris)
+            // instant fallback in the Files-app format, in case the helper can't start
             this._clip.set_content(CB, 'x-special/gnome-copied-files',
                 new GLib.Bytes(new TextEncoder().encode(['copy', ...item.uris].join('\n'))));
         else if (item.text !== undefined)
@@ -328,6 +329,63 @@ export default class WinClip extends Extension {
             this._clip.set_content(CB, item.mime ?? PNG, item.png);
         const target = this._target;
         this._close();
+        if (item.uris)
+            this._offerFiles(item, () => this._sendPaste(target));
+        else
+            this._sendPaste(target);
+    }
+
+    // GNOME 46 lets an extension offer only one clipboard format, but Slack, browsers etc. want
+    // files as text/uri-list (or the picture). A tiny helper offers all of them, like the Files app.
+    _offerFiles(item, done) {
+        try {
+            const dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'winclip']);
+            GLib.mkdir_with_parents(dir, 0o700);
+            this._helper?.force_exit(); // only one helper alive at a time
+            // drop leftovers from a helper that died before reading its files
+            const old = Gio.File.new_for_path(dir).enumerate_children('standard::name', 0, null);
+            for (let info; (info = old.next_file(null));)
+                GLib.unlink(GLib.build_filenamev([dir, info.get_name()]));
+            const args = ['python3', '-I', GLib.build_filenamev([this.path, 'paste-helper.py'])];
+            const put = (mime, data) => {
+                const f = GLib.build_filenamev([dir, `${GLib.get_monotonic_time()}-${args.length}`]);
+                GLib.file_set_contents(f, data);
+                args.push(`${mime}=${f}`);
+            };
+            const enc = t => new TextEncoder().encode(t);
+            put('x-special/gnome-copied-files', enc(['copy', ...item.uris].join('\n')));
+            put('text/uri-list', enc(`${item.uris.join('\r\n')}\r\n`));
+            put('text/plain;charset=utf-8', enc(item.uris.map(u => Gio.File.new_for_uri(u).get_path() ?? u).join('\n')));
+            if (item.png)
+                put(item.mime ?? PNG, item.png.toArray());
+            this._helper = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE);
+            // paste once it says "ready"; if it dies or takes over 1 s, paste the fallback anyway
+            let fired = false;
+            const once = () => {
+                if (fired)
+                    return;
+                fired = true;
+                if (this._readyId)
+                    GLib.source_remove(this._readyId);
+                this._readyId = null;
+                done();
+            };
+            this._readyId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                this._readyId = null;
+                once();
+                return GLib.SOURCE_REMOVE;
+            });
+            new Gio.DataInputStream({base_stream: this._helper.get_stdout_pipe()})
+                .read_line_async(GLib.PRIORITY_DEFAULT, null, once);
+        } catch (e) {
+            console.warn(`winclip: paste helper failed: ${e.message}`);
+            done();
+        }
+    }
+
+    _sendPaste(target) {
+        if (!this._vk)
+            return; // disabled meanwhile
         // let focus return to the window before typing the shortcut into it
         this._pasteId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
             this._pasteId = null;
