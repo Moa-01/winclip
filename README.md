@@ -106,8 +106,7 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 1. **Watching copies.** WinClip listens for GNOME's "clipboard owner changed" signal. When you copy something it reads the content once:
    - **Text** (anything that offers plain text) is stored as text.
    - **Images** (PNG preferred, otherwise any image format) are stored as the raw image bytes when the copy has no text version. This covers screenshots and "Copy image" in browsers.
-   - **An image file copied in the Files app** is loaded from disk and shown as the picture.
-   - **Other copied files** are stored as their file paths.
+   - **Files copied in the Files app** are remembered as files. A single image file is shown as its picture; anything else is shown as its path. Pasting gives the *files* back, just like Ctrl + V, so they paste into the Files app and onto the desktop.
 2. **History.** Items live in memory, newest first, capped at 25. Each one gets a fingerprint (the text itself, or an MD5 hash of the image) so repeat copies move to the top instead of piling up.
 3. **The panel.** Super + V builds the panel with GNOME's own toolkit (St), places it near the pointer and takes keyboard focus. A transparent layer covers every monitor so a click outside closes it. When it closes, the whole panel is destroyed, so nothing stays around while it's hidden.
 4. **Pasting.** Clicking an item puts it back on the clipboard. WinClip then waits a moment for focus to return to your app and presses **Ctrl + V** with a virtual keyboard. For terminals it presses **Ctrl + Shift + V**; a terminal is spotted by its window class name (`gnome-terminal`, `kitty`, `alacritty`, `wezterm`, `foot`, `konsole`, `tilix`, `ghostty`, `terminator`, `ptyxis`, …).
@@ -128,7 +127,7 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 - **Log out after installing or updating.** Wayland can't reload GNOME Shell while you're logged in.
 - **Opens near the mouse, not the text cursor.** Windows opens it at the text cursor, but Wayland doesn't tell extensions where that is.
 - **One format per item.** Each copy is stored as plain text *or* an image. Formatting (bold, links in rich text, spreadsheet cells) is lost; pasting gives plain text. When a copy offers both text and an image (common in office apps), the text is kept.
-- **Copied files paste as content, not as files.** A copied image file pastes as the image, and other copied files paste as their paths. Pasting a history item into the Files app won't copy the file itself.
+- **Copied files paste only where the Files app's format is understood.** GNOME 46 lets an extension put back just one clipboard format, so files go back in the Files-app format (`x-special/gnome-copied-files`). That works in the Files app and on the desktop. Apps that only take files as `text/uri-list`, or want the raw image (for example some chat apps or image editors), won't paste them. Copy the file again with Ctrl + C there. If the file was moved or deleted since you copied it, pasting does nothing.
 - **Auto-paste presses Ctrl + V** (or Ctrl + Shift + V in recognised terminals). Apps with a different paste shortcut, or terminals whose window class isn't in the list, won't paste automatically. The item is still on the clipboard, so paste it yourself.
 - **Password safety depends on the password manager.** Copies are skipped only when the app marks them as secret (`x-kde-passwordManagerHint`, used by KeePassXC and others). Passwords from apps that don't do this stay in history until you log out, unless you remove them with ✕.
 - **Pins are stored unencrypted** in `~/.local/share/winclip/pinned.json`. Don't pin secrets.

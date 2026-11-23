@@ -74,7 +74,8 @@ export default class WinClip extends Extension {
             this._clip.get_text(CB, (_c, text) => text?.trim() && text.length <= MAX_BYTES && this._add({text}));
     }
 
-    // a single image file copied in the Files app shows as the picture; anything else as its path
+    // Files copied in the Files app: one image shows as the picture, anything else as its path.
+    // Either way it keeps the file list, so pasting gives the files back (Files app, desktop).
     _addFile(bytes) {
         const uris = new TextDecoder().decode(bytes?.toArray() ?? []).split(/\r?\n/).filter(u => u && !u.startsWith('#'));
         const ext = uris[0]?.match(/\.(png|jpe?g|gif|webp|bmp|svg)$/i)?.[1].toLowerCase();
@@ -85,13 +86,13 @@ export default class WinClip extends Extension {
                     throw new Error('too big');
                 const [, data] = file.load_contents(null);
                 const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext.replace('jpg', 'jpeg')}`;
-                this._add({png: new GLib.Bytes(data), mime, path: file.get_path()});
+                this._add({png: new GLib.Bytes(data), mime, path: file.get_path(), uris});
                 return;
             } catch {}
         }
         const text = uris.map(u => decodeURIComponent(u.replace(/^file:\/\//, ''))).join('\n');
         if (text)
-            this._add({text});
+            this._add({text, uris});
     }
 
     _add(item) {
@@ -121,8 +122,8 @@ export default class WinClip extends Extension {
     // ponytail: images inlined as base64 in one JSON file; fine for a handful of pins.
     _save() {
         const pinned = this._items.filter(i => i.pinned).map(i => i.text !== undefined
-            ? {text: i.text}
-            : {png: GLib.base64_encode(i.png.toArray()), mime: i.mime});
+            ? {text: i.text, uris: i.uris}
+            : {png: GLib.base64_encode(i.png.toArray()), mime: i.mime, uris: i.uris, path: i.path});
         GLib.mkdir_with_parents(STORE_DIR, 0o700);
         GLib.file_set_contents(STORE, JSON.stringify(pinned));
     }
@@ -132,8 +133,8 @@ export default class WinClip extends Extension {
             const [, data] = GLib.file_get_contents(STORE);
             return JSON.parse(new TextDecoder().decode(data)).map(i => {
                 const item = i.text !== undefined
-                    ? {text: i.text}
-                    : {png: new GLib.Bytes(GLib.base64_decode(i.png)), mime: i.mime};
+                    ? {text: i.text, uris: i.uris}
+                    : {png: new GLib.Bytes(GLib.base64_decode(i.png)), mime: i.mime, uris: i.uris, path: i.path};
                 return {...item, key: keyOf(item), pinned: true};
             });
         } catch {
@@ -316,7 +317,12 @@ export default class WinClip extends Extension {
     }
 
     _paste(item) {
-        if (item.text !== undefined)
+        // ponytail: GNOME 46 lets an extension offer one format only, so files go back in the
+        // Files-app format; apps that only take text/uri-list won't paste them. Multi-format needs GJS async vfuncs.
+        if (item.uris)
+            this._clip.set_content(CB, 'x-special/gnome-copied-files',
+                new GLib.Bytes(new TextEncoder().encode(['copy', ...item.uris].join('\n'))));
+        else if (item.text !== undefined)
             this._clip.set_text(CB, item.text);
         else
             this._clip.set_content(CB, item.mime ?? PNG, item.png);
