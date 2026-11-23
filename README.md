@@ -20,7 +20,7 @@ Press **Super + V** (the Windows key + V) and a small panel opens with everythin
 
 ## Requirements
 
-- **GNOME Shell 46, 47 or 48.** Tested on Ubuntu 24.04 with GNOME 46 on Wayland.
+- **GNOME Shell 46 to 50.** Tested on Ubuntu 24.04 with GNOME 46 on Wayland. 47 to 50 are allowed but untested (see [Limitations](#limitations)).
 - Nothing else to install. It uses only what a GNOME desktop already ships (GNOME Shell, Python 3, Xwayland).
 
 > Not for KDE Plasma (it has Klipper built in), Sway, Hyprland or other desktops. WinClip is a GNOME Shell extension.
@@ -126,13 +126,15 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 ## Limitations
 
 - **GNOME only.** No support for KDE, Sway, Hyprland, Xfce and so on.
-- **Tested only on GNOME 46 / Ubuntu 24.04 / Wayland.** GNOME 47 and 48 should work but haven't been tested. X11 sessions should work too, also untested.
+- **Tested only on GNOME 46 / Ubuntu 24.04 / Wayland.** GNOME 47 to 50 are listed as supported so the extension loads there, but they haven't been tested. WinClip already adapts to the changes known so far (GNOME 48's new box-layout setting, the newer way of reaching the virtual keyboard). X11 sessions should work too, also untested. If it misbehaves on your version, please open an issue.
+- **GNOME 51 and newer won't load it.** GNOME only loads extensions that list its version in `metadata.json`, because its internals change each release. Once a version is tested it can be added. Until then you can skip the check for *all* extensions, at your own risk: `gsettings set org.gnome.shell disable-extension-version-validation true`.
 - **Log out after installing or updating.** Wayland can't reload GNOME Shell while you're logged in.
 - **Opens near the mouse, not the text cursor.** Windows opens it at the text cursor, but Wayland doesn't tell extensions where that is.
 - **One format per item.** Each copy is stored as plain text *or* an image. Formatting (bold, links in rich text, spreadsheet cells) is lost; pasting gives plain text. When a copy offers both text and an image (common in office apps), the text is kept.
-- **Pasting files needs Xwayland** (GNOME runs it by default). Without it, files only paste into the Files app and the desktop.
+- **Pasting files needs Xwayland** (GNOME runs it by default). Without it, files only paste into the Files app and the desktop. On systems that start Xwayland only when an app first needs it, the very first file paste may fall back to Files-app-only. Later pastes work fully.
 - **Files are pasted from where they were.** If a file was moved or deleted since you copied it, pasting it does nothing.
 - **Rich formats are only kept for files.** For text, only the plain text is restored (see *One format per item*).
+- **Non-Latin keyboard layouts are untested.** Auto-paste presses the *V* key. With a layout that has no V (Arabic, Russian, Greek…) active, the automatic paste might not happen. The item is still on the clipboard, so Ctrl + V by hand works.
 - **Auto-paste presses Ctrl + V** (or Ctrl + Shift + V in recognised terminals). Apps with a different paste shortcut, or terminals whose window class isn't in the list, won't paste automatically. The item is still on the clipboard, so paste it yourself.
 - **Password safety depends on the password manager.** Copies are skipped only when the app marks them as secret (`x-kde-passwordManagerHint`, used by KeePassXC and others). Passwords from apps that don't do this stay in history until you log out, unless you remove them with ✕.
 - **Pins are stored unencrypted** in `~/.local/share/winclip/pinned.json`. Don't pin secrets.

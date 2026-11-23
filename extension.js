@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Cogl from 'gi://Cogl';
@@ -19,6 +20,11 @@ const STORE = GLib.build_filenamev([STORE_DIR, 'pinned.json']);
 // terminals paste with Ctrl+Shift+V
 const TERMINALS = /term|kitty|alacritty|wezterm|foot|konsole|tilix|ghostty|terminator|ptyxis|herdr/i;
 
+// GNOME 48 deprecated St.BoxLayout's `vertical` for `orientation` (which 46/47 lack): use whichever exists
+const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orientation')
+    ? {orientation: Clutter.Orientation.VERTICAL}
+    : {vertical: true};
+
 // GNOME disables extensions on screen lock; keep history across that like Windows does
 let kept = null;
 
@@ -37,7 +43,7 @@ export default class WinClip extends Extension {
     enable() {
         this._clip = St.Clipboard.get_default();
         this._items = kept ?? this._load();
-        this._vk = Clutter.get_default_backend().get_default_seat()
+        this._vk = (global.stage.context?.get_backend() ?? Clutter.get_default_backend()).get_default_seat()
             .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         this._sel = global.display.get_selection();
         this._selId = this._sel.connect('owner-changed', (_s, type) => {
@@ -167,7 +173,7 @@ export default class WinClip extends Extension {
         });
         this._backdrop.connect('key-press-event', (_a, ev) => this._onKey(ev.get_key_symbol()));
 
-        this._card = new St.BoxLayout({vertical: true, style_class: 'winclip'});
+        this._card = new St.BoxLayout({...VERTICAL, style_class: 'winclip'});
         const header = new St.BoxLayout({style_class: 'winclip-header'});
         header.add_child(new St.Label({
             text: 'Clipboard', style_class: 'winclip-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER,
@@ -180,7 +186,7 @@ export default class WinClip extends Extension {
         header.add_child(clear);
         this._card.add_child(header);
 
-        this._list = new St.BoxLayout({vertical: true});
+        this._list = new St.BoxLayout({...VERTICAL});
         this._scroll = new St.ScrollView({
             style_class: 'winclip-scroll', child: this._list, overlay_scrollbars: true,
             hscrollbar_policy: St.PolicyType.NEVER, vscrollbar_policy: St.PolicyType.AUTOMATIC,
@@ -255,7 +261,7 @@ export default class WinClip extends Extension {
         this._rows = [];
 
         if (!this._items.length) {
-            const empty = new St.BoxLayout({vertical: true, style_class: 'winclip-empty', x_expand: true});
+            const empty = new St.BoxLayout({...VERTICAL, style_class: 'winclip-empty', x_expand: true});
             empty.add_child(new St.Icon({icon_name: 'edit-paste-symbolic', style_class: 'winclip-empty-icon'}));
             empty.add_child(new St.Label({text: 'Nothing here yet', style_class: 'winclip-empty-title'}));
             empty.add_child(new St.Label({text: 'Copy something and it will show up here.', style_class: 'winclip-empty-sub'}));
@@ -274,7 +280,7 @@ export default class WinClip extends Extension {
             pick.connect('clicked', () => this._paste(item));
             row.add_child(pick);
 
-            const actions = new St.BoxLayout({vertical: true, style_class: 'winclip-actions'});
+            const actions = new St.BoxLayout({...VERTICAL, style_class: 'winclip-actions'});
             const pin = new St.Button({
                 style_class: `winclip-act${item.pinned ? ' pinned' : ''}`,
                 child: new St.Icon({icon_name: 'view-pin-symbolic', icon_size: 14}),

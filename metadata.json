@@ -2,6 +2,6 @@
   "uuid": "winclip@local",
   "name": "WinClip",
   "description": "Windows-style clipboard history on Super+V",
-  "shell-version": ["46", "47", "48"],
+  "shell-version": ["46", "47", "48", "49", "50"],
   "settings-schema": "org.gnome.shell.extensions.winclip"
 }
