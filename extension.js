@@ -85,7 +85,7 @@ export default class WinClip extends Extension {
                     throw new Error('too big');
                 const [, data] = file.load_contents(null);
                 const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext.replace('jpg', 'jpeg')}`;
-                this._add({png: new GLib.Bytes(data), mime});
+                this._add({png: new GLib.Bytes(data), mime, path: file.get_path()});
                 return;
             } catch {}
         }
@@ -97,6 +97,12 @@ export default class WinClip extends Extension {
     _add(item) {
         if (!this._items)
             return; // callback landed after disable
+        // A file copy offers both the file and its path as text; keep only the picture.
+        const asPath = t => t?.trim().startsWith('file://') ? Gio.File.new_for_uri(t.trim()).get_path() : t?.trim();
+        if (item.text !== undefined && this._items.some(i => i.path && i.path === asPath(item.text)))
+            return;
+        if (item.path)
+            this._items = this._items.filter(i => i.text === undefined || asPath(i.text) !== item.path);
         item.key = keyOf(item);
         const dup = this._items.findIndex(i => i.key === item.key);
         if (dup >= 0)
