@@ -188,6 +188,10 @@ Then log out and back in.
 | `paste-helper.py` | Offers files in every clipboard format when pasting (Python + libX11, no extra packages) |
 | `install.sh` / `uninstall.sh` | Set up / remove for the current user |
 
+## Contributing
+
+Bug reports and ideas are welcome as [issues](https://github.com/Moa-01/winclip/issues). Please include your GNOME version (`gnome-shell --version`) and distro. Code changes are welcome as pull requests; `main` is protected, so every change is reviewed before it's merged.
+
 ## License
 
 [MIT](LICENSE)
