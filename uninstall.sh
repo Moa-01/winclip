@@ -3,6 +3,7 @@
 set -euo pipefail
 
 UUID=winclip@local
+gnome-extensions disable "$UUID" 2>/dev/null || true  # stop it now, not only at next login
 cur=$(gsettings get org.gnome.shell enabled-extensions)
 gsettings set org.gnome.shell enabled-extensions "$(echo "$cur" | sed "s/, '$UUID'//; s/'$UUID', //; s/'$UUID'//")"
 ORIG="${XDG_DATA_HOME:-$HOME/.local/share}/winclip/toggle-message-tray.orig"

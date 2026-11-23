@@ -28,7 +28,7 @@ KEY="org.gnome.shell.keybindings toggle-message-tray"
 ORIG="${XDG_DATA_HOME:-$HOME/.local/share}/winclip/toggle-message-tray.orig"
 cur=$(gsettings get $KEY)
 if [[ $cur == *"'<Super>v'"* ]]; then
-  [[ -f $ORIG ]] || { mkdir -p "$(dirname "$ORIG")"; printf '%s\n' "$cur" > "$ORIG"; }
+  [[ -f $ORIG ]] || { mkdir -p "$(dirname "$ORIG")"; chmod 700 "$(dirname "$ORIG")"; printf '%s\n' "$cur" > "$ORIG"; }
   new=$(sed "s/'<Super>v', //; s/, '<Super>v'//; s/'<Super>v'//" <<< "$cur")
   gsettings set $KEY "$new"
 fi

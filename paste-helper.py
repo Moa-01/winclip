@@ -64,6 +64,12 @@ XSendEvent = sig('XSendEvent', cint, vp, ulong, cint, C.c_long, C.POINTER(XEvent
 XNextEvent = sig('XNextEvent', cint, vp, C.POINTER(XEvent))
 XFlush = sig('XFlush', cint, vp)
 
+# Xlib's default error handler exits the process. A requestor that vanishes mid-request
+# (BadWindow) must not kill us and wipe the clipboard, so ignore protocol errors.
+XErrorHandler = C.CFUNCTYPE(cint, vp, vp)
+_ignore_errors = XErrorHandler(lambda _dpy, _err: 0)  # module-level: must not be garbage-collected
+sig('XSetErrorHandler', vp, XErrorHandler)(_ignore_errors)
+
 
 def main():
     formats = {}

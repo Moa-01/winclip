@@ -9,7 +9,7 @@ Press **Super + V** (the Windows key + V) and a small panel opens with everythin
 ## Features
 
 - **Super + V** opens the history next to your mouse pointer.
-- Keeps your **last 25 copies**, both text and images, with image previews.
+- Keeps your **last 25 copies**, both text and images, with image previews. Pinned items come on top of that.
 - **Click or press Enter to paste** into the app you were in. Terminals get Ctrl + Shift + V automatically.
 - **Pin** items (📌) so they stay through **Clear all**, logouts and restarts.
 - **Keyboard friendly:** ↑ / ↓ to move, Enter to paste, Delete to remove, Esc to close.
@@ -47,7 +47,7 @@ After that, copy something and press **Super + V**.
 
 1. Copies the extension to `~/.local/share/gnome-shell/extensions/winclip@local/`.
 2. Compiles its settings schema (the keyboard shortcut).
-3. Adds it to your enabled extensions.
+3. Adds it to your enabled extensions, and turns on user extensions in general if they were switched off.
 4. Frees up **Super + V**. GNOME normally opens the notification list with Super + V *and* Super + M, so the installer removes only Super + V and keeps your other shortcuts. It remembers what you had, and `uninstall.sh` puts it back exactly.
 
 Everything is installed for your user only. No `sudo`.
@@ -83,10 +83,10 @@ Like Windows, unpinned history only lasts for your session:
 | Event | What's removed |
 |---|---|
 | Log out / restart | All unpinned items |
-| More than 25 items | The oldest unpinned item |
+| More than 25 unpinned items | The oldest unpinned item (pins don't count toward the 25) |
 | **Clear all** | All unpinned items |
 | **✕** on an item | That item, pinned or not |
-| Locking the screen | Nothing. History is kept |
+| Locking the screen | Nothing. History is kept (WinClip stays on while the screen is locked; the popup just closes) |
 
 Pinned items are saved to disk and come back after a restart.
 
@@ -101,7 +101,7 @@ It usually applies right away. If it doesn't, log out and back in.
 
 ## How it works
 
-WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside GNOME Shell itself (`extension.js`, about 330 lines).
+WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside GNOME Shell itself (`extension.js`).
 
 **Why an extension and not a normal app?** On Wayland, regular apps aren't allowed to read the clipboard in the background, which protects you from apps spying on your copies. GNOME doesn't offer the extra protocol that some other desktops use for clipboard managers. The only place that can see every copy on GNOME is the shell itself, so WinClip lives there.
 
@@ -109,21 +109,21 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
    - **Text** (anything that offers plain text) is stored as text.
    - **Images** (PNG preferred, otherwise any image format) are stored as the raw image bytes when the copy has no text version. This covers screenshots and "Copy image" in browsers.
    - **Files copied in the Files app** are remembered as files. A single image file is shown as its picture; anything else is shown as its path. Pasting gives the *files* back, just like Ctrl + V, so they paste into the Files app and onto the desktop.
-2. **History.** Items live in memory, newest first, capped at 25. Each one gets a fingerprint (the text itself, or an MD5 hash of the image) so repeat copies move to the top instead of piling up.
+2. **History.** Items live in memory, newest first: 25 unpinned items plus your pins. Each one gets a fingerprint (an MD5 hash of the text or image) so repeat copies move to the top instead of piling up. Every copy is read in the background and the read stops at 4 MB, so an oversized copy is dropped without ever being loaded into GNOME Shell.
 3. **The panel.** Super + V builds the panel with GNOME's own toolkit (St), places it near the pointer and takes keyboard focus. A transparent layer covers every monitor so a click outside closes it. When it closes, the whole panel is destroyed, so nothing stays around while it's hidden.
 4. **Pasting.** Clicking an item puts it back on the clipboard. WinClip then waits a moment for focus to return to your app and presses **Ctrl + V** with a virtual keyboard. For terminals it presses **Ctrl + Shift + V**; a terminal is spotted by its window class name (`gnome-terminal`, `kitty`, `alacritty`, `wezterm`, `foot`, `konsole`, `tilix`, `ghostty`, `terminator`, `ptyxis`, …).
    - **Files** need several clipboard formats at once: the Files app and desktop read `x-special/gnome-copied-files`, while Slack, browsers and most other apps read `text/uri-list` (or the picture itself). GNOME 46 only lets an extension offer *one* format, so for file items WinClip starts `paste-helper.py`. This tiny helper takes the clipboard through X11 (an X11 app may do that without focus, and GNOME forwards every format to all apps) and offers all of them, like the Files app does. WinClip sends Ctrl + V once the helper says it's ready. The helper exits as soon as anything else is copied.
    - If the helper can't start or isn't ready within 1 second, WinClip pastes anyway with just the Files-app format, so the Files app and desktop still work. The helper also quits by itself if it can't get the clipboard within 5 seconds.
-5. **Pins.** Pinned items are written to `~/.local/share/winclip/pinned.json`, with images stored as base64. The folder is readable only by you (`0700`). Nothing else is ever written to disk.
+5. **Pins.** Pinned items are written to `~/.local/share/winclip/pinned.json`, with images stored as base64. They're saved in the background, readable only by you (file `0600`, folder `0700`). If that file is ever damaged, it's moved aside as `pinned.json.broken-<date>` instead of being overwritten. The only other file WinClip keeps is `toggle-message-tray.orig` in the same folder: the installer's note of your original notification shortcut.
 
 ### Memory and disk use
 
-- **Per-item limit:** anything over **4 MB** is skipped, the same limit Windows uses.
-- **History limit:** **25 items** maximum.
-- **Image previews:** small thumbnails (at most 300 × 170 px), decoded once per image and reused. Full-size images are never decoded.
+- **Per-item limit:** anything over **4 MB** is skipped (measured in bytes, so non-Latin text isn't let through at twice the size), the same limit Windows uses.
+- **History limit:** **25 unpinned items** maximum, plus whatever you pin.
+- **Image previews:** small thumbnails (at most 300 × 170 px), made once per image in the background and reused. Images over about 36 megapixels get no preview rather than being decoded.
 - **Measured memory:** 25 full-screen screenshots in history added about 45 MB to GNOME Shell's memory, which is the worst case. A text-only history is a few kilobytes.
 - **File paste helper:** about 11 MB (15 MB with a 4 MB image). It only runs while a file you pasted from WinClip is on the clipboard, at most one at a time, and exits on your next copy.
-- **Disk:** the extension itself is about 50 KB. The only file it keeps is the pins file. The helper's handover files in `$XDG_RUNTIME_DIR/winclip/` (a RAM-backed folder only you can read) are deleted the moment the helper reads them.
+- **Disk:** the extension itself is about 50 KB. The only file it keeps is the pins file. Temporary files in `$XDG_RUNTIME_DIR/winclip/` (a RAM-backed folder only you can read) are deleted right away: the helper's handover files as soon as it reads them, and images being previewed as soon as their size is checked.
 
 ## Limitations
 
@@ -172,7 +172,7 @@ If the pins file was damaged, WinClip doesn't overwrite it. It's moved aside as 
 
 **An image shows as the word "Image"**
 
-GNOME couldn't decode a preview for that format. Pasting it still works.
+Either it's huge (over about 36 megapixels, where a preview would need hundreds of MB to make) or GNOME can't decode that format. Pasting it still works.
 
 ## Uninstall
 

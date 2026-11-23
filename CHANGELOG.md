@@ -1,7 +1,29 @@
 # Changelog
 
 All notable changes to WinClip. Versions follow [Semantic Versioning](https://semver.org/):
-**major** for breaking changes, **minor** for new features or notable fixes, **patch** for small fixes.
+**major** for breaking changes, **minor** for new features, **patch** for fixes.
+
+## [1.1.1] - 2026-11-23
+
+Fixes from a full code review.
+
+### Fixed
+- **The paste helper could be killed by any X11 app**, wiping a file you'd just pasted from the clipboard. It now ignores X11 errors from requestors that disappear mid-request.
+- **Huge copies could stall or crash GNOME Shell.** The 4 MB limit was checked only after the whole copy had been read in (a 200 MB copy stalled the shell for 0.8 s). Copies are now read in the background and the read stops at 4 MB.
+- **Image previews could freeze the shell.** A small file with huge dimensions (12000×12000 px) froze it for 0.4–0.8 s and used about 600 MB. Previews are now made entirely in the background, and images over about 36 megapixels get none. Measured: 402 ms → 1 ms.
+- **A file disguised as an image (for example a link to `/dev/zero` named `x.png`) made the shell read forever.** Only regular files are read now.
+- **Pins weren't always private.** The pins file is now `0600` in a `0700` folder, whatever the system's default permissions. Pins are also saved in the background, with errors logged instead of breaking the popup.
+- **Super+V didn't close the popup.** It does now.
+- **With 25 items pinned, new copies were silently dropped.** Pins no longer count toward the 25-item limit.
+- **Copying a file could hide a pinned text item** equal to its path. Pinned items are never touched.
+- **History stayed in memory after you turned WinClip off.** WinClip now stays enabled on the lock screen (so history still survives a lock), and turning it off really clears everything.
+- Non-Latin text could take twice the 4 MB limit. The limit is now in bytes, and long text is hashed instead of copied for duplicate checks.
+- Timers from two quick file pastes could interfere with each other.
+- `uninstall.sh` now stops WinClip right away instead of leaving it running until logout.
+- README corrections.
+
+### Changed
+- Slimmer, quieter scrollbar.
 
 ## [1.1.0] - 2026-11-23
 
@@ -30,5 +52,6 @@ First release.
 - Skips copies password managers mark as secret.
 - GNOME 46 to 50.
 
+[1.1.1]: https://github.com/Moa-01/winclip/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Moa-01/winclip/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Moa-01/winclip/releases/tag/v1.0.0

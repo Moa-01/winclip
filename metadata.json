@@ -10,5 +10,9 @@
     "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.winclip",
-  "version-name": "1.1.0"
+  "version-name": "1.1.1",
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ]
 }
