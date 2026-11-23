@@ -4,7 +4,12 @@ Clipboard history for GNOME that works like Windows' **Win + V**, with a cleaner
 
 Press **Super + V** (the Windows key + V) and a small panel opens with everything you copied recently: text, links, screenshots and images. Click an item and it gets pasted into the app you were using.
 
-<p align="center"><img src="docs/screenshot.png" alt="WinClip popup showing text, a link and an image" width="380"></p>
+<p align="center">
+  <img src="docs/screenshot.png" alt="WinClip popup in the dark style: search box, a pinned note, an image preview and a link" width="340">
+  &nbsp;
+  <img src="docs/screenshot-light.png" alt="The same popup in the light style" width="340">
+</p>
+<p align="center"><sub>Dark and light style. With custom GNOME Terminal colors, it uses those instead.</sub></p>
 
 ## Features
 
@@ -12,7 +17,10 @@ Press **Super + V** (the Windows key + V) and a small panel opens with everythin
 - Keeps your **last 25 copies**, both text and images, with image previews. Pinned items come on top of that.
 - **Click or press Enter to paste** into the app you were in. Terminals get Ctrl + Shift + V automatically.
 - **Pin** items (📌) so they stay through **Clear all**, logouts and restarts.
+- **Search:** just start typing to filter the list.
+- **Quick paste:** **Alt + 1** to **Alt + 9** pastes the 1st to 9th item straight away.
 - **Keyboard friendly:** ↑ / ↓ to move, Enter to paste, Delete to remove, Esc to close.
+- **Matches your setup:** takes its colors from your GNOME Terminal profile (background, text, and the cursor color as the highlight). Without custom terminal colors it follows GNOME's light / dark setting.
 - **Click outside** to close it. Works across multiple monitors.
 - Copying the same thing again moves it to the top instead of adding a duplicate.
 - Skips copies that password managers mark as secret.
@@ -74,6 +82,8 @@ Then log out and back in.
 | Remove an item | **Delete**, or the **✕** button |
 | Pin / unpin | The **📌** button |
 | Remove everything except pins | **Clear all** |
+| Search | Just start typing (or click the search box). **Enter** pastes the top match; **↓** moves into the results and **↑** from the first result goes back to the search box |
+| Paste the 1st to 9th item | **Alt + 1** … **Alt + 9** (counts the list as shown, so it works on search results too) |
 | Close without pasting | **Esc**, or click anywhere outside the panel |
 
 ### When items go away
@@ -89,6 +99,15 @@ Like Windows, unpinned history only lasts for your session:
 | Locking the screen | Nothing. History is kept (WinClip stays on while the screen is locked; the popup just closes) |
 
 Pinned items are saved to disk and come back after a restart.
+
+### Colors
+
+WinClip picks its colors each time it opens:
+
+1. **Your GNOME Terminal profile**, if it uses its own colors (*Preferences → your profile → Colors*, with "Use colors from system theme" off): the terminal background becomes the panel background, the text color is used for text and subtle borders, and the **cursor color** (when set) is the highlight, used for the selected row, pins, the search box and "Clear all".
+2. Otherwise **GNOME's light / dark style** (*Settings → Appearance*), with a blue highlight.
+
+Change your terminal colors or the GNOME style and the next Super+V picks them up. Nothing to restart.
 
 ### Change the shortcut
 
@@ -115,6 +134,7 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
    - **Files** need several clipboard formats at once: the Files app and desktop read `x-special/gnome-copied-files`, while Slack, browsers and most other apps read `text/uri-list` (or the picture itself). GNOME 46 only lets an extension offer *one* format, so for file items WinClip starts `paste-helper.py`. This tiny helper takes the clipboard through X11 (an X11 app may do that without focus, and GNOME forwards every format to all apps) and offers all of them, like the Files app does. WinClip sends Ctrl + V once the helper says it's ready. The helper exits as soon as anything else is copied.
    - If the helper can't start or isn't ready within 1 second, WinClip pastes anyway with just the Files-app format, so the Files app and desktop still work. The helper also quits by itself if it can't get the clipboard within 5 seconds.
 5. **Pins.** Pinned items are written to `~/.local/share/winclip/pinned.json`, with images stored as base64. They're saved in the background, readable only by you (file `0600`, folder `0700`). If that file is ever damaged, it's moved aside as `pinned.json.broken-<date>` instead of being overwritten. The only other file WinClip keeps is `toggle-message-tray.orig` in the same folder: the installer's note of your original notification shortcut.
+6. **Colors.** On open, WinClip reads the GNOME Terminal profile (or GNOME's light/dark setting), builds a tiny color stylesheet and loads it over `stylesheet.css`, which keeps the layout. It's only rebuilt when the colors actually change.
 
 ### Memory and disk use
 
@@ -123,7 +143,7 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 - **Image previews:** small thumbnails (at most 300 × 170 px), made once per image in the background and reused. Images over about 36 megapixels get no preview rather than being decoded.
 - **Measured memory:** 25 full-screen screenshots in history added about 45 MB to GNOME Shell's memory, which is the worst case. A text-only history is a few kilobytes.
 - **File paste helper:** about 11 MB (15 MB with a 4 MB image). It only runs while a file you pasted from WinClip is on the clipboard, at most one at a time, and exits on your next copy.
-- **Disk:** the extension itself is about 50 KB. The only file it keeps is the pins file. Temporary files in `$XDG_RUNTIME_DIR/winclip/` (a RAM-backed folder only you can read) are deleted right away: the helper's handover files as soon as it reads them, and images being previewed as soon as their size is checked.
+- **Disk:** the extension itself is about 70 KB. The only file it keeps is the pins file. Temporary files in `$XDG_RUNTIME_DIR/winclip/` (a RAM-backed folder only you can read) are deleted right away: the helper's handover files as soon as it reads them, and images being previewed as soon as their size is checked. The small colors stylesheet stays there while WinClip runs and is removed when it's turned off. Anything left behind by a crash is cleared the next time WinClip starts.
 
 ## Limitations
 
@@ -140,8 +160,9 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 - **Auto-paste presses Ctrl + V** (or Ctrl + Shift + V in recognised terminals). Apps with a different paste shortcut, or terminals whose window class isn't in the list, won't paste automatically. The item is still on the clipboard, so paste it yourself.
 - **Password safety depends on the password manager.** Copies are skipped only when the app marks them as secret (`x-kde-passwordManagerHint`, used by KeePassXC and others). Passwords from apps that don't do this stay in history until you log out, unless you remove them with ✕.
 - **Pins are stored unencrypted** in `~/.local/share/winclip/pinned.json`. Don't pin secrets.
-- **Dark theme only.**
-- **Not included from Windows 11:** search, the emoji / GIF / symbol tabs, and cloud sync between devices.
+- **Colors come from GNOME Terminal only.** Other terminals (kitty, Alacritty, Ghostty…) keep their colors in their own config files, which WinClip doesn't read. With those, it follows GNOME's light / dark style.
+- **Search matches text only:** text items, and the names of copied files. Pictures copied from a browser or screenshot have no text, so they're hidden while you search.
+- **Not included from Windows 11:** the emoji / GIF / symbol tabs, and cloud sync between devices.
 - **Not on extensions.gnome.org.** Install it from this repo.
 
 ## Troubleshooting
@@ -159,7 +180,7 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
    ```
 3. Make sure nothing else uses Super + V:
    ```bash
-   gsettings get org.gnome.shell.keybindings toggle-message-tray   # should be ['<Super>m']
+   gsettings get org.gnome.shell.keybindings toggle-message-tray   # shouldn't contain '<Super>v'
    ```
 
 **An item didn't paste**
@@ -169,6 +190,10 @@ The app probably uses a different paste shortcut. The item is already on the cli
 **My pinned items disappeared**
 
 If the pins file was damaged, WinClip doesn't overwrite it. It's moved aside as `~/.local/share/winclip/pinned.json.broken-<date>` and a warning is logged, so nothing is lost.
+
+**The colors don't match my terminal**
+
+WinClip reads your *default* GNOME Terminal profile. Check that "Use colors from system theme" is off in that profile, and that a custom cursor color is set if you want it as the highlight. Colors too close together (text barely readable, or a cursor color almost the same as the background) are ignored on purpose, and the defaults are used instead.
 
 **An image shows as the word "Image"**
 
@@ -187,12 +212,14 @@ Then log out and back in.
 
 | File | Purpose |
 |---|---|
-| `extension.js` | All the logic: watching copies, history, panel, pasting |
-| `stylesheet.css` | The look |
+| `extension.js` | All the logic: watching copies, history, panel, search, colors, pasting |
+| `stylesheet.css` | The layout, plus default colors (the real colors are generated from your terminal or light / dark style) |
 | `metadata.json` | Extension name, ID and supported GNOME versions |
 | `schemas/` | The Super + V shortcut setting |
 | `paste-helper.py` | Offers files in every clipboard format when pasting (Python + libX11, no extra packages) |
 | `install.sh` / `uninstall.sh` | Set up / remove for the current user |
+| `CHANGELOG.md` | What changed in each version |
+| `docs/` | Screenshots for this README |
 
 ## Contributing
 

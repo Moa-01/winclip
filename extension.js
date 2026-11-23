@@ -29,6 +29,22 @@ const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orientation')
     ? {orientation: Clutter.Orientation.VERTICAL}
     : {vertical: true};
 
+// Popup colors when the terminal doesn't provide its own: GNOME light / dark
+const DEFAULT_COLORS = {
+    dark: {bg: [30, 31, 36], fg: [236, 236, 241], accent: [143, 184, 255]},
+    light: {bg: [250, 250, 251], fg: [29, 29, 32], accent: [53, 132, 228]},
+};
+
+function parseColor(s) {
+    let m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m)
+        return m.slice(1, 4).map(Number);
+    m = s.match(/^#([0-9a-f]{6})$/i);
+    return m ? [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)) : null;
+}
+
+const luma = c => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255;
+
 function keyOf(item) {
     return item.text !== undefined
         ? `t:${GLib.compute_checksum_for_string(GLib.ChecksumType.MD5, item.text, -1)}`
@@ -45,6 +61,13 @@ export default class WinClip extends Extension {
         this._clip = St.Clipboard.get_default();
         this._timers = new Set();
         this._cancel = new Gio.Cancellable();
+        // everything in our runtime folder is temporary: clear leftovers from a crashed session
+        try {
+            const tmp = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'winclip']);
+            const files = Gio.File.new_for_path(tmp).enumerate_children('standard::name', 0, null);
+            for (let info; (info = files.next_file(null));)
+                GLib.unlink(GLib.build_filenamev([tmp, info.get_name()]));
+        } catch {} // no folder yet
         this._items = this._load();
         this._vk = (global.stage.context?.get_backend() ?? Clutter.get_default_backend()).get_default_seat()
             .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
@@ -71,7 +94,12 @@ export default class WinClip extends Extension {
         for (const id of this._timers)
             GLib.source_remove(id);
         this._close();
+        if (this._cssFile) {
+            this._theme?.unload_stylesheet(this._cssFile);
+            this._cssFile.delete(null);
+        }
         this._clip = this._items = this._vk = this._sel = this._timers = this._cancel = null;
+        this._css = this._cssFile = this._theme = null;
     }
 
     _later(ms, fn) {
@@ -314,6 +342,73 @@ export default class WinClip extends Extension {
         return new St.Widget({content: item.thumb, width: w, height: h});
     }
 
+    // ---- colors ----
+
+    // Colors follow the GNOME Terminal profile when it has its own colors (background, text, and
+    // the cursor color as the accent); otherwise GNOME's light/dark setting.
+    _colors() {
+        const scheme = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).get_string('color-scheme');
+        const c = {...DEFAULT_COLORS[scheme === 'prefer-dark' ? 'dark' : 'light']};
+        try {
+            const src = Gio.SettingsSchemaSource.get_default();
+            if (!src.lookup('org.gnome.Terminal.ProfilesList', true) || !src.lookup('org.gnome.Terminal.Legacy.Profile', true))
+                return c;
+            const id = new Gio.Settings({schema_id: 'org.gnome.Terminal.ProfilesList'}).get_string('default');
+            const p = new Gio.Settings({
+                schema_id: 'org.gnome.Terminal.Legacy.Profile', path: `/org/gnome/terminal/legacy/profiles:/:${id}/`,
+            });
+            const bg = parseColor(p.get_string('background-color'));
+            const fg = parseColor(p.get_string('foreground-color'));
+            if (!p.get_boolean('use-theme-colors') && bg && fg && Math.abs(luma(bg) - luma(fg)) > 0.3) {
+                c.bg = bg;
+                c.fg = fg;
+            }
+            const accent = parseColor(p.get_string('cursor-background-color'));
+            if (p.get_boolean('cursor-colors-set') && accent && Math.abs(luma(accent) - luma(c.bg)) > 0.2)
+                c.accent = accent;
+        } catch {} // unusual terminal settings: keep the defaults
+        return c;
+    }
+
+    // Writes the colors as a small stylesheet layered over stylesheet.css (which keeps the layout),
+    // reloading it only when the colors actually changed.
+    _applyTheme() {
+        const {bg, fg, accent} = this._colors();
+        const a = (c, o) => `rgba(${c.join(', ')}, ${o})`;
+        const css = `
+#winclip { background-color: ${a(bg, 0.97)}; color: ${a(fg, 1)}; border-color: ${a(fg, 0.08)}; }
+#winclip .winclip-clear { color: ${a(accent, 1)}; }
+#winclip .winclip-clear:hover, #winclip .winclip-clear:focus { background-color: ${a(accent, 0.14)}; }
+#winclip .winclip-item { background-color: ${a(fg, 0.045)}; border-color: ${a(fg, 0.04)}; }
+#winclip .winclip-item:hover { background-color: ${a(fg, 0.085)}; }
+#winclip .winclip-pick:focus { border-color: ${a(accent, 0.9)}; background-color: ${a(accent, 0.08)}; }
+#winclip .winclip-act { color: ${a(fg, 0.35)}; }
+#winclip .winclip-act:hover { background-color: ${a(fg, 0.1)}; color: ${a(fg, 1)}; }
+#winclip .winclip-act.pinned { color: ${a(accent, 1)}; }
+#winclip .winclip-search { background-color: ${a(fg, 0.06)}; color: ${a(fg, 1)}; caret-color: ${a(fg, 1)}; selection-background-color: ${a(accent, 0.35)}; selected-color: ${a(fg, 1)}; }
+#winclip .winclip-search, #winclip .winclip-search:focus, #winclip .winclip-search:hover { box-shadow: none; }
+#winclip .winclip-search:focus { border-color: ${a(accent, 0.9)}; }
+#winclip .winclip-search StLabel.hint-text, #winclip .winclip-search-icon, #winclip .winclip-empty-sub { color: ${a(fg, 0.5)}; }
+#winclip .winclip-empty-icon { color: ${a(fg, 0.25)}; }
+#winclip .winclip-scroll StScrollBar StButton#vhandle { background-color: ${a(fg, 0.18)}; }
+#winclip .winclip-scroll StScrollBar StButton#vhandle:hover { background-color: ${a(fg, 0.35)}; }
+`;
+        const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
+        if (css === this._css && theme === this._theme)
+            return;
+        if (this._cssFile) {
+            this._theme?.unload_stylesheet(this._cssFile);
+            this._cssFile.delete(null);
+        }
+        const dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'winclip']);
+        GLib.mkdir_with_parents(dir, 0o700);
+        this._cssFile = Gio.File.new_for_path(GLib.build_filenamev([dir, `theme-${GLib.uuid_string_random()}.css`]));
+        this._cssFile.replace_contents(new TextEncoder().encode(css), null, false, Gio.FileCreateFlags.PRIVATE, null);
+        theme.load_stylesheet(this._cssFile);
+        this._css = css;
+        this._theme = theme;
+    }
+
     // ---- popup ----
 
     _toggle() {
@@ -325,6 +420,11 @@ export default class WinClip extends Extension {
 
     _open() {
         this._target = global.display.focus_window;
+        try {
+            this._applyTheme();
+        } catch (e) {
+            console.warn(`winclip: colors: ${e.message}`); // stylesheet.css defaults still apply
+        }
         const mon = Main.layoutManager.currentMonitor;
 
         // full-screen invisible layer: clicking outside the card closes it
@@ -335,9 +435,11 @@ export default class WinClip extends Extension {
                 this._close();
             return Clutter.EVENT_PROPAGATE;
         });
-        this._backdrop.connect('key-press-event', (_a, ev) => this._onKey(ev.get_key_symbol()));
+        // captured (before the focused widget) so our keys work whether a row or the search box has focus
+        this._backdrop.connect('captured-event', (_a, ev) =>
+            ev.type() === Clutter.EventType.KEY_PRESS ? this._onKey(ev) : Clutter.EVENT_PROPAGATE);
 
-        this._card = new St.BoxLayout({...VERTICAL, style_class: 'winclip'});
+        this._card = new St.BoxLayout({...VERTICAL, style_class: 'winclip', name: 'winclip'});
         const header = new St.BoxLayout({style_class: 'winclip-header'});
         header.add_child(new St.Label({
             text: 'Clipboard', style_class: 'winclip-title', x_expand: true, y_align: Clutter.ActorAlign.CENTER,
@@ -349,6 +451,13 @@ export default class WinClip extends Extension {
         });
         header.add_child(clear);
         this._card.add_child(header);
+
+        this._search = new St.Entry({
+            style_class: 'winclip-search', hint_text: 'Search', can_focus: true, x_expand: true,
+            primary_icon: new St.Icon({icon_name: 'edit-find-symbolic', style_class: 'winclip-search-icon'}),
+        });
+        this._search.clutter_text.connect('text-changed', () => this._render());
+        this._card.add_child(this._search);
 
         this._list = new St.BoxLayout({...VERTICAL});
         this._scroll = new St.ScrollView({
@@ -376,7 +485,7 @@ export default class WinClip extends Extension {
             this._close();
             return;
         }
-        this._rows[0]?.grab_key_focus();
+        (this._rows[0] ?? this._search).grab_key_focus();
 
         this._card.set_pivot_point(0.5, 0);
         this._card.opacity = 0;
@@ -390,22 +499,40 @@ export default class WinClip extends Extension {
         if (this._grab)
             Main.popModal(this._grab);
         this._backdrop.destroy();
-        this._backdrop = this._card = this._scroll = this._list = this._grab = this._rows = null;
+        this._backdrop = this._card = this._scroll = this._list = this._grab = this._rows = this._search = this._shown = null;
     }
 
-    _onKey(sym) {
+    _onKey(ev) {
+        const sym = ev.get_key_symbol();
+        const mods = ev.get_state();
         const focus = global.stage.key_focus;
-        const idx = this._rows.findIndex(r => r === focus);
+        const inSearch = focus === this._search.clutter_text;
+        const idx = this._rows.indexOf(focus);
         if (sym === Clutter.KEY_Escape) {
             this._close();
+        } else if ((mods & Clutter.ModifierType.MOD1_MASK) && sym >= Clutter.KEY_1 && sym <= Clutter.KEY_9) {
+            const item = this._shown[sym - Clutter.KEY_1]; // Alt+N pastes the Nth item in the list
+            if (item)
+                this._paste(item);
         } else if (sym === Clutter.KEY_Down || sym === Clutter.KEY_Up) {
-            const next = this._rows[Math.max(0, Math.min(idx + (sym === Clutter.KEY_Down ? 1 : -1), this._rows.length - 1))];
+            const down = sym === Clutter.KEY_Down;
+            const next = inSearch
+                ? (down ? this._rows[0] : null)
+                : (idx === 0 && !down ? this._search : this._rows[Math.max(0, Math.min(idx + (down ? 1 : -1), this._rows.length - 1))]);
             next?.grab_key_focus();
-            if (next)
+            if (next && next !== this._search)
                 ensureActorVisibleInScrollView(this._scroll, next.get_parent());
+        } else if (inSearch && (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter)) {
+            if (this._shown[0])
+                this._paste(this._shown[0]); // Enter in the search box pastes the best match
         } else if (sym === Clutter.KEY_Delete && idx >= 0) {
-            this._remove(this._items[idx]);
+            this._remove(this._shown[idx]);
             this._rows[Math.min(idx, this._rows.length - 1)]?.grab_key_focus();
+        } else if (!inSearch && !(mods & (Clutter.ModifierType.CONTROL_MASK | Clutter.ModifierType.MOD1_MASK |
+                Clutter.ModifierType.SUPER_MASK | Clutter.ModifierType.MOD4_MASK)) && ev.get_key_unicode() > ' ') {
+            // typing while a row is selected starts a search
+            this._search.grab_key_focus();
+            this._search.clutter_text.insert_unichar(ev.get_key_unicode());
         } else {
             return Clutter.EVENT_PROPAGATE;
         }
@@ -424,7 +551,16 @@ export default class WinClip extends Extension {
             return;
         this._list.destroy_all_children();
         this._rows = [];
+        const q = this._search?.text.trim().toLowerCase() ?? '';
+        // ponytail: plain substring match on the first 100k characters of each item
+        this._shown = q
+            ? this._items.filter(i => (i.lc ??= (i.text ?? i.path ?? '').slice(0, 100000).toLowerCase()).includes(q))
+            : this._items;
 
+        if (q && !this._shown.length) {
+            this._list.add_child(new St.Label({text: 'No matches', style_class: 'winclip-empty-sub winclip-nomatch', x_expand: true}));
+            return;
+        }
         if (!this._items.length) {
             const empty = new St.BoxLayout({...VERTICAL, style_class: 'winclip-empty', x_expand: true});
             empty.add_child(new St.Icon({icon_name: 'edit-paste-symbolic', style_class: 'winclip-empty-icon'}));
@@ -434,7 +570,7 @@ export default class WinClip extends Extension {
             return;
         }
 
-        for (const item of this._items) {
+        for (const item of this._shown) {
             const row = new St.BoxLayout({style_class: 'winclip-item', track_hover: true, reactive: true});
 
             const pick = new St.Button({style_class: 'winclip-pick', can_focus: true, x_expand: true});
@@ -507,7 +643,7 @@ export default class WinClip extends Extension {
             // drop leftovers from a helper that died before reading its files
             const old = Gio.File.new_for_path(dir).enumerate_children('standard::name', 0, null);
             for (let info; (info = old.next_file(null));) {
-                if (!info.get_name().startsWith('thumb-')) // previews in progress use this folder too
+                if (/^\d+-\d+$/.test(info.get_name())) // only helper handover files; previews and colors live here too
                     GLib.unlink(GLib.build_filenamev([dir, info.get_name()]));
             }
             const args = ['python3', '-I', GLib.build_filenamev([this.path, 'paste-helper.py'])];

@@ -3,6 +3,16 @@
 All notable changes to WinClip. Versions follow [Semantic Versioning](https://semver.org/):
 **major** for breaking changes, **minor** for new features, **patch** for fixes.
 
+## [1.2.0] - 2026-11-23
+
+### Added
+- **Search:** start typing in the popup to filter the list. Enter pastes the top match, ↓ moves into the results, ↑ from the first result goes back to the search box.
+- **Alt+1 to Alt+9** paste the 1st to 9th item in the list as shown (search results included).
+- **Colors from your GNOME Terminal profile:** its background, text and cursor color (as the highlight). Without custom terminal colors, WinClip follows GNOME's **light / dark** setting, so there's a light theme now.
+
+### Fixed
+- Temporary files left behind if GNOME Shell crashed mid-preview are now cleared when WinClip starts.
+
 ## [1.1.1] - 2026-11-23
 
 Fixes from a full code review.
@@ -52,6 +62,7 @@ First release.
 - Skips copies password managers mark as secret.
 - GNOME 46 to 50.
 
+[1.2.0]: https://github.com/Moa-01/winclip/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/Moa-01/winclip/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Moa-01/winclip/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Moa-01/winclip/releases/tag/v1.0.0
