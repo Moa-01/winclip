@@ -48,7 +48,7 @@ After that, copy something and press **Super + V**.
 1. Copies the extension to `~/.local/share/gnome-shell/extensions/winclip@local/`.
 2. Compiles its settings schema (the keyboard shortcut).
 3. Adds it to your enabled extensions.
-4. Frees up **Super + V**. GNOME normally uses Super + V *and* Super + M to open the notification list, so the installer leaves that on **Super + M** only.
+4. Frees up **Super + V**. GNOME normally opens the notification list with Super + V *and* Super + M, so the installer removes only Super + V and keeps your other shortcuts. It remembers what you had, and `uninstall.sh` puts it back exactly.
 
 Everything is installed for your user only. No `sudo`.
 
@@ -59,6 +59,8 @@ cd winclip
 git pull
 ./install.sh
 ```
+
+Check which version you have with `gnome-extensions info winclip@local` (the `Version` line) or in the Extensions app. What changed in each version is in [CHANGELOG.md](CHANGELOG.md), and every version is on the [Releases page](https://github.com/Moa-01/winclip/releases).
 
 Then log out and back in.
 
@@ -164,6 +166,10 @@ WinClip is a GNOME Shell extension, a small piece of JavaScript that runs inside
 
 The app probably uses a different paste shortcut. The item is already on the clipboard, so press that app's paste shortcut.
 
+**My pinned items disappeared**
+
+If the pins file was damaged, WinClip doesn't overwrite it. It's moved aside as `~/.local/share/winclip/pinned.json.broken-<date>` and a warning is logged, so nothing is lost.
+
 **An image shows as the word "Image"**
 
 GNOME couldn't decode a preview for that format. Pasting it still works.
@@ -171,7 +177,7 @@ GNOME couldn't decode a preview for that format. Pasting it still works.
 ## Uninstall
 
 ```bash
-./uninstall.sh            # remove WinClip, give Super+V back to notifications
+./uninstall.sh            # remove WinClip, restore your original notification shortcut
 ./uninstall.sh --purge    # same, and also delete your pinned items
 ```
 

@@ -84,23 +84,45 @@ export default class WinClip extends Extension {
 
     // Files copied in the Files app: one image shows as the picture, anything else as its path.
     // Either way it keeps the file list, so pasting gives the files back (Files app, desktop).
+    // Only local file:// URIs count as files (http:// etc. would make Gio fetch over the network),
+    // and the image is read asynchronously so a slow disk or network mount can't freeze the shell.
     _addFile(bytes) {
         const uris = new TextDecoder().decode(bytes?.toArray() ?? []).split(/\r?\n/).filter(u => u && !u.startsWith('#'));
-        const ext = uris[0]?.match(/\.(png|jpe?g|gif|webp|bmp|svg)$/i)?.[1].toLowerCase();
-        if (uris.length === 1 && ext) {
-            try {
-                const file = Gio.File.new_for_uri(uris[0]);
-                if (file.query_info('standard::size', 0, null).get_size() > MAX_BYTES)
-                    throw new Error('too big');
-                const [, data] = file.load_contents(null);
-                const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext.replace('jpg', 'jpeg')}`;
-                this._add({png: new GLib.Bytes(data), mime, path: file.get_path(), uris});
-                return;
-            } catch {}
+        if (!uris.length)
+            return;
+        if (!uris.every(u => u.startsWith('file://'))) {
+            this._add({text: uris.join('\n')}); // links, not files: keep as plain text
+            return;
         }
-        const text = uris.map(u => decodeURIComponent(u.replace(/^file:\/\//, ''))).join('\n');
-        if (text)
-            this._add({text, uris});
+        const ext = uris[0].match(/\.(png|jpe?g|gif|webp|bmp|svg)$/i)?.[1].toLowerCase();
+        if (uris.length !== 1 || !ext) {
+            this._addPaths(uris);
+            return;
+        }
+        const file = Gio.File.new_for_uri(uris[0]);
+        file.query_info_async('standard::size', 0, GLib.PRIORITY_DEFAULT, null, (_f, res) => {
+            try {
+                if (file.query_info_finish(res).get_size() > MAX_BYTES)
+                    throw new Error('too big');
+            } catch {
+                this._addPaths(uris);
+                return;
+            }
+            file.load_contents_async(null, (_f2, res2) => {
+                try {
+                    const [, data] = file.load_contents_finish(res2);
+                    const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext.replace('jpg', 'jpeg')}`;
+                    this._add({png: new GLib.Bytes(data), mime, path: file.get_path(), uris});
+                } catch {
+                    this._addPaths(uris);
+                }
+            });
+        });
+    }
+
+    _addPaths(uris) {
+        // Gio decodes %-escapes itself and never throws on bad ones
+        this._add({text: uris.map(u => Gio.File.new_for_uri(u).get_path() ?? u).join('\n'), uris});
     }
 
     _add(item) {
@@ -137,15 +159,24 @@ export default class WinClip extends Extension {
     }
 
     _load() {
+        let data;
         try {
-            const [, data] = GLib.file_get_contents(STORE);
+            [, data] = GLib.file_get_contents(STORE);
+        } catch {
+            return []; // no pins yet
+        }
+        try {
             return JSON.parse(new TextDecoder().decode(data)).map(i => {
                 const item = i.text !== undefined
                     ? {text: i.text, uris: i.uris}
                     : {png: new GLib.Bytes(GLib.base64_decode(i.png)), mime: i.mime, uris: i.uris, path: i.path};
                 return {...item, key: keyOf(item), pinned: true};
             });
-        } catch {
+        } catch (e) {
+            // move it aside so the next pin can't overwrite it; it can be fixed by hand
+            const bad = `${STORE}.broken-${GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S')}`;
+            GLib.rename(STORE, bad);
+            console.warn(`winclip: pinned items unreadable (${e.message}); kept as ${bad}`);
             return [];
         }
     }
@@ -395,6 +426,8 @@ export default class WinClip extends Extension {
         // let focus return to the window before typing the shortcut into it
         this._pasteId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
             this._pasteId = null;
+            if (global.display.focus_window !== target)
+                return GLib.SOURCE_REMOVE; // focus moved elsewhere: the item is on the clipboard, don't type into the wrong window
             const now = () => GLib.get_monotonic_time();
             const keys = [Clutter.KEY_Control_L];
             if (TERMINALS.test(target?.get_wm_class() ?? ''))
