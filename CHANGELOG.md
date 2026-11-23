@@ -3,6 +3,11 @@
 All notable changes to WinClip. Versions follow [Semantic Versioning](https://semver.org/):
 **major** for breaking changes, **minor** for new features, **patch** for fixes.
 
+## [1.2.1] - 2026-11-23
+
+### Changed
+- The popup now has a thin border, so it stays visible on top of a window with the same background color (for example a black terminal when WinClip uses your terminal's colors).
+
 ## [1.2.0] - 2026-11-23
 
 ### Added
@@ -62,6 +67,7 @@ First release.
 - Skips copies password managers mark as secret.
 - GNOME 46 to 50.
 
+[1.2.1]: https://github.com/Moa-01/winclip/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Moa-01/winclip/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/Moa-01/winclip/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Moa-01/winclip/compare/v1.0.0...v1.1.0

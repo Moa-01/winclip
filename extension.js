@@ -376,7 +376,7 @@ export default class WinClip extends Extension {
         const {bg, fg, accent} = this._colors();
         const a = (c, o) => `rgba(${c.join(', ')}, ${o})`;
         const css = `
-#winclip { background-color: ${a(bg, 0.97)}; color: ${a(fg, 1)}; border-color: ${a(fg, 0.08)}; }
+#winclip { background-color: ${a(bg, 0.97)}; color: ${a(fg, 1)}; border-color: ${a(fg, 0.25)}; }
 #winclip .winclip-clear { color: ${a(accent, 1)}; }
 #winclip .winclip-clear:hover, #winclip .winclip-clear:focus { background-color: ${a(accent, 0.14)}; }
 #winclip .winclip-item { background-color: ${a(fg, 0.045)}; border-color: ${a(fg, 0.04)}; }
