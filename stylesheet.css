@@ -1,0 +1,53 @@
+.winclip {
+  width: 380px;
+  padding: 14px 10px 10px 14px;
+  border-radius: 16px;
+  background-color: rgba(30, 31, 36, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  color: #ececf1;
+}
+
+.winclip-header { padding: 0 4px 10px 2px; }
+.winclip-title { font-size: 15px; font-weight: 700; }
+
+.winclip-clear {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #8fb8ff;
+}
+.winclip-clear:hover, .winclip-clear:focus { background-color: rgba(143, 184, 255, 0.14); }
+
+.winclip-scroll { max-height: 440px; padding-right: 4px; }
+
+.winclip-item {
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition-duration: 120ms;
+}
+.winclip-item:hover { background-color: rgba(255, 255, 255, 0.085); }
+
+.winclip-pick {
+  padding: 8px 10px;
+  border-radius: 11px;
+  border: 2px solid transparent;
+}
+.winclip-pick:focus { border-color: rgba(143, 184, 255, 0.9); background-color: rgba(143, 184, 255, 0.08); }
+.winclip-text { font-size: 13px; }
+
+.winclip-actions { padding: 4px; spacing: 2px; }
+.winclip-act {
+  padding: 6px;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.35);
+}
+.winclip-act:hover { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
+.winclip-act.pinned { color: #8fb8ff; }
+
+.winclip-empty { padding: 36px 0 30px; }
+.winclip-empty-icon { icon-size: 36px; color: rgba(255, 255, 255, 0.25); margin-bottom: 10px; }
+.winclip-empty-title { font-weight: 700; text-align: center; }
+.winclip-empty-sub { font-size: 12px; color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 4px; }
